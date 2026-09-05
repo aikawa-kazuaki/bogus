@@ -1,0 +1,4 @@
+/* 必要に応じて独自のスタイルを追加できます */
+body {
+    -webkit-font-smoothing: antialiased;
+}
