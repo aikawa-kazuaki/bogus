@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>実績詳細マップ - 高圧ガス過去問クイズ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <style>
+        .map-cell {
+            transition: all 0.15s ease-in-out;
+            cursor: pointer;
+        }
+        .map-cell:hover {
+            transform: scale(0.97);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 min-h-screen p-3 md:p-8 text-slate-800 dark:text-slate-100">
+
+    <div class="max-w-5xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-4 md:p-8">
+        
+        <!-- ヘッダー -->
+        <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold">📊 科目・問別実績マップ</h1>
+                <p id="map-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">正解率・演習実績マップ</p>
+            </div>
+            <a href="index.html" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold py-2 px-3 md:px-4 rounded-lg text-xs md:text-sm transition">
+                ← トップに戻る
+            </a>
+        </div>
+
+        <!-- 1段目：学科切替タブ -->
+        <div class="flex border-b border-slate-200 dark:border-slate-700 mb-3">
+            <button onclick="switchSubject('hoan')" id="tab-sub-hoan" class="py-2.5 px-3 md:px-5 font-bold text-xs md:text-sm border-b-2 border-blue-600 text-blue-600 dark:text-blue-400">
+                保安管理技術 (問1~15 / イロハニ)
+            </button>
+            <button onclick="switchSubject('hohrei')" id="tab-sub-hohrei" class="py-2.5 px-3 md:px-5 font-bold text-xs md:text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                法令 (問1~20 / イロハ)
+            </button>
+            <button onclick="switchSubject('gakushiki')" id="tab-sub-gakushiki" class="py-2.5 px-3 md:px-5 font-bold text-xs md:text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                学識 (問1~5 / 記述・総合)
+            </button>
+        </div>
+
+        <!-- 2段目：年度切替タブ -->
+        <div class="flex space-x-1.5 md:space-x-2 overflow-x-auto pb-2 mb-4 text-xs md:text-sm font-semibold scrollbar-thin">
+            <button onclick="switchYear('2021')" id="tab-year-2021" class="year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap">R3 (2021)</button>
+            <button onclick="switchYear('2022')" id="tab-year-2022" class="year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap">R4 (2022)</button>
+            <button onclick="switchYear('2023')" id="tab-year-2023" class="year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap">R5 (2023)</button>
+            <button onclick="switchYear('2024')" id="tab-year-2024" class="year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap">R6 (2024)</button>
+            <button onclick="switchYear('2025')" id="tab-year-2025" class="year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 whitespace-nowrap">R7 (2025)</button>
+        </div>
+
+        <!-- テーブル表示エリア -->
+        <div class="overflow-x-auto max-h-[calc(100vh-250px)] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+            <table class="w-full text-center border-collapse text-xs md:text-sm">
+                <thead id="map-table-head" class="sticky top-0 bg-slate-100 dark:bg-slate-800 shadow-sm z-10">
+                </thead>
+                <tbody id="map-table-body">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 凡例ガイド -->
+        <div class="mt-4 flex flex-wrap gap-3 items-center justify-end text-[11px] text-slate-500 dark:text-slate-400">
+            <span>凡例:</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">80%以上</span>
+            <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">60%〜79%</span>
+            <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold">60%未満</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-400">- 未解答</span>
+        </div>
+
+    </div>
+
+    <!-- マップ処理ロジック -->
+    <script>
+        if (localStorage.getItem('gas_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+
+        let currentSubject = 'hoan';
+        let currentYear = '2022';
+
+        const historyData = JSON.parse(localStorage.getItem('gas_quiz_detailed_history')) || {};
+
+        function switchSubject(subject) {
+            currentSubject = subject;
+            ['hoan', 'hohrei', 'gakushiki'].forEach(s => {
+                const btn = document.getElementById(`tab-sub-${s}`);
+                if (s === subject) {
+                    btn.className = "py-2.5 px-3 md:px-5 font-bold text-xs md:text-sm border-b-2 border-blue-600 text-blue-600 dark:text-blue-400";
+                } else {
+                    btn.className = "py-2.5 px-3 md:px-5 font-bold text-xs md:text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200";
+                }
+            });
+            renderMap();
+        }
+
+        function switchYear(year) {
+            currentYear = year;
+            ['2021', '2022', '2023', '2024', '2025'].forEach(y => {
+                const btn = document.getElementById(`tab-year-${y}`);
+                if (y === year) {
+                    btn.className = "year-tab py-1.5 px-3 rounded-lg bg-blue-600 text-white font-bold border border-blue-600 whitespace-nowrap";
+                } else {
+                    btn.className = "year-tab py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 whitespace-nowrap";
+                }
+            });
+            renderMap();
+        }
+
+        function renderMap() {
+            const thead = document.getElementById("map-table-head");
+            const tbody = document.getElementById("map-table-body");
+            const subtitle = document.getElementById("map-subtitle");
+            
+            tbody.innerHTML = "";
+
+            let maxQuestions = 15;
+            let branches = ['イ', 'ロ', 'ハ', 'ニ'];
+
+            if (currentSubject === 'hoan') {
+                maxQuestions = 15;
+                branches = ['イ', 'ロ', 'ハ', 'ニ'];
+                subtitle.textContent = "保安管理技術（問1〜15 / 肢: イ・ロ・ハ・ニ）";
+            } else if (currentSubject === 'hohrei') {
+                maxQuestions = 20;
+                branches = ['イ', 'ロ', 'ハ'];
+                subtitle.textContent = "法令（問1〜20 / 肢: イ・ロ・ハ）";
+            } else if (currentSubject === 'gakushiki') {
+                maxQuestions = 5;
+                branches = [];
+                subtitle.textContent = "学識（問1〜5 / 記述問題別正解率）";
+            }
+
+            let headHtml = `<tr class="text-slate-700 dark:text-slate-200"><th class="p-2.5 border-b border-r border-slate-200 dark:border-slate-700 w-16">問</th>`;
+            if (branches.length > 0) {
+                branches.forEach(b => {
+                    headHtml += `<th class="p-2.5 border-b border-r border-slate-200 dark:border-slate-700">${b}</th>`;
+                });
+                headHtml += `<th class="p-2.5 border-b border-slate-200 dark:border-slate-700 w-24">問全体系</th></tr>`;
+            } else {
+                headHtml += `<th class="p-2.5 border-b border-slate-200 dark:border-slate-700">演習状況・正解率</th></tr>`;
+            }
+            thead.innerHTML = headHtml;
+
+            for (let qNum = 1; qNum <= maxQuestions; qNum++) {
+                let qTotalSolved = 0;
+                let qTotalCorrect = 0;
+
+                let rowHtml = `<tr class="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-700/20">`;
+                rowHtml += `<td class="p-2 font-bold border-r border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">問${qNum}</td>`;
+
+                if (branches.length > 0) {
+                    branches.forEach(branch => {
+                        const key = `${currentSubject}_${currentYear}_Q${qNum}_${branch}`;
+                        const stats = historyData[key] || { solved: 0, correct: 0 };
+
+                        const solved = stats.solved || 0;
+                        const correct = stats.correct || 0;
+
+                        qTotalSolved += solved;
+                        qTotalCorrect += correct;
+
+                        const rate = solved > 0 ? Math.round((correct / solved) * 100) : null;
+
+                        let badgeClass = "bg-slate-100 dark:bg-slate-700/60 text-slate-400 dark:text-slate-500";
+                        if (rate !== null) {
+                            if (rate >= 80) badgeClass = "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-bold";
+                            else if (rate >= 60) badgeClass = "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold";
+                            else badgeClass = "bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-bold";
+                        }
+
+                        rowHtml += `
+                            <td class="p-2 border-r border-slate-200 dark:border-slate-700">
+                                <div class="map-cell py-1.5 px-2 rounded-lg ${badgeClass}"
+                                     title="${currentYear}年 問${qNum} 肢${branch} の演習へ"
+                                     onclick="navigateToQuiz('${currentSubject}', '${currentYear}', ${qNum}, '${branch}')">
+                                    <div>${rate !== null ? `${rate}%` : '-'}</div>
+                                    <div class="text-[9px] opacity-75 font-normal">(${correct}/${solved})</div>
+                                </div>
+                            </td>
+                        `;
+                    });
+
+                    const qRate = qTotalSolved > 0 ? Math.round((qTotalCorrect / qTotalSolved) * 100) : null;
+                    rowHtml += `
+                        <td class="p-2 font-bold">
+                            <div class="${qRate >= 60 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}">
+                                ${qRate !== null ? `${qRate}%` : '-'}
+                            </div>
+                            <div class="text-[9px] text-slate-400 font-normal">(${qTotalCorrect}/${qTotalSolved})</div>
+                        </td>
+                    </tr>`;
+                } else {
+                    const key = `${currentSubject}_${currentYear}_Q${qNum}_ALL`;
+                    const stats = historyData[key] || { solved: 0, correct: 0 };
+                    const solved = stats.solved || 0;
+                    const correct = stats.correct || 0;
+                    const rate = solved > 0 ? Math.round((correct / solved) * 100) : null;
+
+                    let badgeClass = "bg-slate-100 dark:bg-slate-700/60 text-slate-400 dark:text-slate-500";
+                    if (rate !== null) {
+                        if (rate >= 80) badgeClass = "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-bold";
+                        else if (rate >= 60) badgeClass = "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold";
+                        else badgeClass = "bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-bold";
+                    }
+
+                    rowHtml += `
+                        <td class="p-2">
+                            <div class="map-cell py-2 px-4 rounded-lg ${badgeClass} flex justify-between items-center max-w-sm mx-auto"
+                                 onclick="navigateToQuiz('${currentSubject}', '${currentYear}', ${qNum}, '')">
+                                <span>演習を開始する</span>
+                                <span class="font-bold">${rate !== null ? `${rate}%` : '未解答'} (${correct}/${solved})</span>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+
+                tbody.innerHTML += rowHtml;
+            }
+        }
+
+        function navigateToQuiz(subject, year, question, branch) {
+            const params = new URLSearchParams({
+                subject: subject,
+                year: year,
+                q: question
+            });
+            if (branch) params.append('b', branch);
+            window.location.href = `index.html?${params.toString()}`;
+        }
+
+        switchYear('2022');
+        switchSubject('hoan');
+    </script>
+</body>
+</html>
